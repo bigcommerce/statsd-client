@@ -30,7 +30,7 @@ class ClientTest extends PHPUnit_Framework_TestCase
 		$this->assertTrue($statsd->increment($data, 100));
 	}
 
-	public function testIncrementWitMockedUpdateStats()
+	public function testIncrementWithMockedUpdateStats()
 	{
 		$statsd = $this->getEnabledMockStatsObject(array('updateStats'));
 		$statsd->expects($this->exactly(1))
@@ -41,7 +41,7 @@ class ClientTest extends PHPUnit_Framework_TestCase
 		$this->assertTrue($statsd->increment($data, 0.5));
 	}
 
-	public function testIncrementWitMockedSocketSend()
+	public function testIncrementWithMockedSocketSend()
 	{
 		$data = array('api.products');
 		$dataSent = 'api.products:1|c';
@@ -62,6 +62,50 @@ class ClientTest extends PHPUnit_Framework_TestCase
 			   ->with($this->anything(), $this->anything());
 		$data = array('api.products');
 		$this->assertTrue($statsd->decrement($data));
+	}
+
+	public function testSameSocketAfterSuccessfulIncrement()
+	{
+		$statsd = $this->getEnabledMockStatsObject(array('_writeDataToSocket'));
+		$statsd->expects($this->any())
+			   ->method('_writeDataToSocket')
+			   ->will($this->returnValue(true));
+
+		$statsd->setReuseSocket(true);
+
+		$class = new ReflectionClass('StatsD\\Client');
+		$getSocket = $class->getMethod('getSocket');
+		$getSocket->setAccessible(true);
+
+		$statsd->increment('foo');
+		$socketA = $getSocket->invokeArgs($statsd, array());
+
+		$statsd->increment('bar');
+		$socketB = $getSocket->invokeArgs($statsd, array());
+
+		$this->assertSame($socketA, $socketB);
+	}
+
+	public function testSocketChangedAfterUnsuccessfulIncrement()
+	{
+		$statsd = $this->getEnabledMockStatsObject(array('_writeDataToSocket'));
+		$statsd->expects($this->any())
+			   ->method('_writeDataToSocket')
+			   ->will($this->returnValue(false));
+
+		$statsd->setReuseSocket(true);
+
+		$class = new ReflectionClass('StatsD\\Client');
+		$getSocket = $class->getMethod('getSocket');
+		$getSocket->setAccessible(true);
+
+		$statsd->increment('foo');
+		$socketA = $getSocket->invokeArgs($statsd, array());
+
+		$statsd->increment('bar');
+		$socketB = $getSocket->invokeArgs($statsd, array());
+
+		$this->assertNotSame($socketA, $socketB);
 	}
 
 	public function testDecrementWithString()

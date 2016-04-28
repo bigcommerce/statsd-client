@@ -12,7 +12,7 @@ use Exception;
 
 /**
  * A very simple StatsD client.
- * 
+ *
  * Captures metrics and sends them to the StatsD daemon over UDP.
  */
 class Client
@@ -38,6 +38,24 @@ class Client
 	 * @var bool
 	 */
 	private $_enabled = true;
+
+	/**
+	 * @var bool
+	 */
+	protected $_reuseSocket = false;
+
+	/**
+	 * @var resource
+	 */
+	protected $_socket;
+
+	/**
+	 * @return void
+	 */
+	public function __destruct()
+	{
+		$this->_closeSocket();
+	}
 
 	/**
 	 * Log timing information
@@ -149,6 +167,25 @@ class Client
 			return false;
 		}
 
+		if ($this->_reuseSocket) {
+			// connection-reusing code branch
+
+			$fp = $this->getSocket();
+			if (!$fp) {
+				return false;
+			}
+
+			foreach ($sampledData as $stat => $value) {
+				if ($this->_writeDataToSocket($fp, $stat . ':' . $value) === false) {
+					// stop writing data and ensure socket is closed
+					$this->_closeSocket();
+					break;
+				}
+			}
+
+			return true;
+		}
+
 		// Wrap this in a try/catch - failures in any of this should be silently ignored
 		try {
 			$fp = fsockopen('udp://' . $this->getHost(), $this->getPort(), $errno, $errstr);
@@ -168,12 +205,42 @@ class Client
 	}
 
 	/**
+	 * Open statsd socket to currently configured host / port.
+	 *
+	 * @return resource|bool
+	 */
+	protected function getSocket()
+	{
+		if (!is_resource($this->_socket)) {
+			$this->_socket = fsockopen('udp://' . $this->getHost(), $this->getPort());
+		}
+
+		return $this->_socket;
+	}
+
+	/**
+	 * Close statsd socket.
+	 *
+	 * @return void
+	 */
+	protected function _closeSocket()
+	{
+		if (is_resource($this->_socket)) {
+			fclose($this->_socket);
+			$this->_socket = null;
+		}
+	}
+
+	/**
 	 * Write given data to the given socket. This is broken out into a method to enable unit
 	 * testing of the send method easily by mocking this method.
-	 **/
+	 *
+	 * @see fwrite() for return values
+	 * @return int
+	 */
 	protected function _writeDataToSocket($socket, $string)
 	{
-		fwrite($socket, $string);
+		return fwrite($socket, $string);
 	}
 
 	/**
@@ -185,6 +252,7 @@ class Client
 	 */
 	public function setHost($host)
 	{
+		$this->_closeSocket();
 		$this->_host = (string)$host;
 		return $this;
 	}
@@ -208,6 +276,7 @@ class Client
 	 */
 	public function setPort($port)
 	{
+		$this->_closeSocket();
 		$this->_port = (int)$port;
 		return $this;
 	}
@@ -232,8 +301,19 @@ class Client
 	 */
 	public function setEnabled($enabled)
 	{
+		$this->_closeSocket();
 		$this->_enabled = (bool)$enabled;
 		return $this;
+	}
+
+	/**
+	 * Enable or disable socket reuse.
+	 *
+	 * @param bool $reuseSocket
+	 */
+	public function setReuseSocket($reuseSocket)
+	{
+		$this->_reuseSocket = (bool)$reuseSocket;
 	}
 
 	/**
