@@ -30,7 +30,7 @@ class ClientTest extends PHPUnit_Framework_TestCase
 		$this->assertTrue($statsd->increment($data, 100));
 	}
 
-	public function testIncrementWitMockedUpdateStats()
+	public function testIncrementWithMockedUpdateStats()
 	{
 		$statsd = $this->getEnabledMockStatsObject(array('updateStats'));
 		$statsd->expects($this->exactly(1))
@@ -41,7 +41,7 @@ class ClientTest extends PHPUnit_Framework_TestCase
 		$this->assertTrue($statsd->increment($data, 0.5));
 	}
 
-	public function testIncrementWitMockedSocketSend()
+	public function testIncrementWithMockedSocketSend()
 	{
 		$data = array('api.products');
 		$dataSent = 'api.products:1|c';
