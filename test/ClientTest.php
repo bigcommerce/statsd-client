@@ -64,6 +64,18 @@ class ClientTest extends PHPUnit_Framework_TestCase
 		$this->assertTrue($statsd->decrement($data));
 	}
 
+	public function testIncrementWithReuseSocket()
+	{
+		$statsd = $this->getEnabledMockStatsObject(array('_writeDataToSocket'));
+		$statsd->setReuseSocket(true);
+		$statsd->expects($this->exactly(2))
+			   ->method('_writeDataToSocket')
+			   ->with($this->anything(), $this->anything());
+		$data = array('api.products');
+		$this->assertTrue($statsd->increment($data));
+		$this->assertTrue($statsd->increment($data));
+	}
+
 	public function testDecrementWithString()
 	{
 		$statsd = $this->getEnabledMockStatsObject(array('_writeDataToSocket'));
